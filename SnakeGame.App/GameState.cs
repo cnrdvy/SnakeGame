@@ -1,4 +1,8 @@
-﻿namespace SnakeGame.App;
+﻿using SnakeGame.App.Handlers.KeyPress;
+using SnakeGame.App.Handlers.NextMove;
+using System.Windows.Input;
+
+namespace SnakeGame.App;
 
 public class GameState
 {
@@ -6,9 +10,27 @@ public class GameState
 
     private readonly LinkedList<Position> _snakePositions = new();
     private readonly Random _random = new();
+    private readonly Dictionary<Key, KeyPressHandler> _keyHandlers;
+    private readonly Dictionary<GridValueEnumeration, NextMoveHandler> _nextMoveHandlers;
 
     public GameState(int rows, int columns)
     {
+        _keyHandlers = new Dictionary<Key, KeyPressHandler>
+        {
+            { Key.Left, new LeftKeyPressHandler(this) },
+            { Key.Right,new RightKeyPressHandler(this) },
+            { Key.Up, new UpKeyPressHandler(this) },
+            { Key.Down, new DownKeyPressHandler(this) }
+        };
+
+        _nextMoveHandlers = new Dictionary<GridValueEnumeration, NextMoveHandler>
+        {
+            { GridValueEnumeration.Outside, new NextMoveIsOutsideOrSnakeHandler(this) },
+            { GridValueEnumeration.Snake, new NextMoveIsOutsideOrSnakeHandler(this) },
+            { GridValueEnumeration.Empty, new NextMoveIsEmptyHandler(this) },
+            { GridValueEnumeration.Food, new NextMoveIsFoodHandler(this) }
+        };
+
         Rows = rows;
         Columns = columns;
         Grid = new GridValueEnumeration[rows, columns];
@@ -25,12 +47,21 @@ public class GameState
     public int Columns { get; }
     public GridValueEnumeration[,] Grid { get; }
     public Direction Direction { get; private set; } = Direction.Right;
-    public int Score { get; private set; }
-    public bool IsGameOver { get; private set; }
+    public int Score { get; set; }
+    public bool IsGameOver { get; set; }
 
     #endregion
 
     #region Public Methods
+
+    public void HandleKeyPress(Key key)
+    {
+        if (IsGameOver)
+            return;
+
+        if (_keyHandlers.TryGetValue(key, out var keyHandler))
+            keyHandler.HandleKeyPress();
+    }
 
     public Position GetSnakeHeadPosition() => _snakePositions.First.Value;
 
@@ -38,35 +69,18 @@ public class GameState
 
     public IEnumerable<Position> GetSnakePositions() => _snakePositions;
 
-    public void ChangeSnakeDirection(Direction direction)
+    public void SetSnakeDirection(Direction direction)
     {
         Direction = direction;
     }
 
-    public void MoveSnake()
+    public void HandleNextMove()
     {
-        var newHeadPosition = GetSnakeHeadPosition().Translate(Direction);
-        var collisionPrediction = HandleSnakeCollision(newHeadPosition);
+        Position newHeadPosition = GetSnakeHeadPosition().Translate(Direction);
+        GridValueEnumeration nextMove = GetSnakeNextMove(newHeadPosition);
 
-        switch (collisionPrediction)
-        {
-            case GridValueEnumeration.Outside:
-            case GridValueEnumeration.Snake:
-                IsGameOver = true;
-                break;
-
-            case GridValueEnumeration.Empty:
-                RemoveSnakeTailPosition();
-                SetSnakeHeadPosition(newHeadPosition);
-                break;
-
-            case GridValueEnumeration.Food:
-                SetSnakeHeadPosition(newHeadPosition);
-                SetFoodPosition();
-
-                Score++;
-                break;
-        }
+        if (_nextMoveHandlers.TryGetValue(nextMove, out var nextMoveHandler))
+            nextMoveHandler.HandleNextMove(newHeadPosition);
     }
 
     #endregion
@@ -100,7 +114,7 @@ public class GameState
         return emptyPositions;
     }
 
-    private void SetFoodPosition()
+    public void SetFoodPosition()
     {
         var emptyPositions = GetEmptyPositions();
         if (emptyPositions.Count == 0)
@@ -110,13 +124,13 @@ public class GameState
         Grid[foodPosition.Row, foodPosition.Column] = GridValueEnumeration.Food;
     }
 
-    private void SetSnakeHeadPosition(Position position)
+    public void SetSnakeHeadPosition(Position position)
     {
         _snakePositions.AddFirst(position);
         Grid[position.Row, position.Column] = GridValueEnumeration.Snake;
     }
 
-    private void RemoveSnakeTailPosition()
+    public void RemoveSnakeTailPosition()
     {
         Position tailPosition = _snakePositions.Last.Value;
         Grid[tailPosition.Row, tailPosition.Column] = GridValueEnumeration.Empty;
@@ -129,7 +143,7 @@ public class GameState
         || position.Column < 0 
         || position.Column >= Columns;
 
-    private GridValueEnumeration HandleSnakeCollision(Position newHeadPosition)
+    private GridValueEnumeration GetSnakeNextMove(Position newHeadPosition)
     {
         if (IsSnakeOutsideGrid(newHeadPosition))
             return GridValueEnumeration.Outside;

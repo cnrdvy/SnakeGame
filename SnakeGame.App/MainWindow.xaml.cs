@@ -12,7 +12,8 @@ namespace SnakeGame.App
     {
         private readonly int _rows = 15, _columns = 15;
         private readonly Image[,] _gridImages;
-        private readonly Dictionary<GridValueEnumeration, ImageSource> _gridValueToImage = new()
+        private readonly Dictionary<GridValueEnumeration, ImageSource> _gridValueToImage 
+            = new()
         {
             { GridValueEnumeration.Empty, Images.Empty },
             { GridValueEnumeration.Snake, Images.Body },
@@ -52,36 +53,15 @@ namespace SnakeGame.App
             await GameLoop();
         }
 
-        private void Window_KeyDown(object sender, KeyEventArgs e)
-        {
-            if (_gameState.IsGameOver)
-                return;
-
-            switch (e.Key)
-            {
-                case Key.Left:
-                    _gameState.ChangeSnakeDirection(Direction.Left);
-                    break;
-                case Key.Right:
-                    _gameState.ChangeSnakeDirection(Direction.Right);
-                    break;
-                case Key.Up:
-                    _gameState.ChangeSnakeDirection(Direction.Up);
-                    break;
-                case Key.Down:
-                    _gameState.ChangeSnakeDirection(Direction.Down);
-                    break;
-                default:
-                    return;
-            }
-        }
+        private void Window_KeyDown(object sender, KeyEventArgs e) 
+            => _gameState.HandleKeyPress(e.Key);
 
         private async Task GameLoop()
         {
             while (!_gameState.IsGameOver)
             {
                 await Task.Delay(100);
-                _gameState.MoveSnake();
+                _gameState.HandleNextMove();
                 Draw();
             }
         }
